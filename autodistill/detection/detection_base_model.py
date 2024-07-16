@@ -4,19 +4,14 @@ import os
 from abc import abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
-
+from typing import Dict, List
 import cv2
 import numpy as np
-import roboflow
-import supervision as sv
-from PIL import Image
-from supervision.utils.file import save_text_file
+import time 
 from tqdm import tqdm
-
 from autodistill.core import BaseModel
 from autodistill.helpers import load_image, split_data
-
+import supervision as sv
 from .detection_ontology import DetectionOntology
 
 
@@ -31,12 +26,11 @@ class DetectionBaseModel(BaseModel):
     ontology: DetectionOntology
 
     @abstractmethod
-    def predict(self, input: str | np.ndarray | Image.Image) -> sv.Detections:
+    def predict(self, input: str | np.ndarray) -> sv.Detections:
         pass
 
-    def sahi_predict(self, input: str | np.ndarray | Image.Image) -> sv.Detections:
+    def sahi_predict(self, input: str | np.ndarray) -> sv.Detections:
         slicer = sv.InferenceSlicer(callback=self.predict)
-
         return slicer(load_image(input, return_format="cv2"))
 
     def _record_confidence_in_files(
@@ -64,11 +58,11 @@ class DetectionBaseModel(BaseModel):
         output_folder: str = None,
         human_in_the_loop: bool = False,
         roboflow_project: str = None,
-        roboflow_tags: str = ["autodistill"],
+        roboflow_tags: List[str] = ["autodistill"],
         sahi: bool = False,
         record_confidence: bool = False,
         nms_settings: NmsSetting = NmsSetting.NONE,
-        batch_size: int = 2 
+        batch_size: int = 2 # Added batch_size parameter
     ) -> sv.DetectionDataset:
         """
         Label a dataset with the model.
@@ -85,7 +79,12 @@ class DetectionBaseModel(BaseModel):
             slicer = sv.InferenceSlicer(callback=self.predict)
 
         files = glob.glob(input_folder + "/*" + extension)
+        
+        
+        # UNCOMMENT FROM HERE TO LINE NO 103 to run on whole folder.
         progress_bar = tqdm(files, desc="Labeling images")
+        
+        start_time = time.time()
         # iterate through images in input_folder
         for f_path in progress_bar:
             progress_bar.set_description(desc=f"Labeling {f_path}", refresh=True)
@@ -106,6 +105,65 @@ class DetectionBaseModel(BaseModel):
 
             detections_map[f_path_short] = detections
 
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        total_time = elapsed_time//60
+        print(f"Time take to label the dataset {total_time} minitues") 
+        # BATCH INFERENCE (UNCOMMENT FROM HERE TO LINE NO 152 TO USE BATCH INFERENCE)
+        
+        # def batch_loader(file_list, batch_size):
+        #     for i in range(0, len(file_list), batch_size):
+        #         yield file_list[i:i + batch_size]
+
+        # total_batches = (len(files) + batch_size - 1) // batch_size
+        # main_progress_bar = tqdm(total=total_batches, desc="Processing batches")
+
+        # start_time = time.time()  
+        # for batch_index,batch_files in enumerate(batch_loader(files, batch_size),start=1):
+        #     batch_images = []
+        #     for file_path in batch_files:
+        #         image = cv2.imread(file_path)
+        #         if image is not None:
+        #             batch_images.append(image)
+            
+        #     batch_desc = f"Inferencing Batch-{batch_index}"
+        #     batch_progress_bar = tqdm(total=len(batch_images), desc=batch_desc, leave=False)
+
+        #     if sahi:
+        #         detections_batch = []
+        #         for image in batch_images:
+        #             detections = slicer(image)
+        #             detections_batch.append(detections)
+        #             batch_progress_bar.update(1)
+        #     else:
+        #         detections_batch = []
+        #         for image in batch_images:
+        #             detections = self.predict(image)
+        #             detections_batch.append(detections)
+        #             batch_progress_bar.update(1)
+
+        #     batch_progress_bar.close()
+
+        #     for img_path, image, detections in zip(batch_files, batch_images, detections_batch):
+        #         img_path_short = os.path.basename(img_path)
+        #         images_map[img_path_short] = image
+
+        #         if nms_settings == NmsSetting.CLASS_SPECIFIC:
+        #             detections = detections.with_nms()
+        #         if nms_settings == NmsSetting.CLASS_AGNOSTIC:
+        #             detections = detections.with_nms(class_agnostic=True)
+
+        #         detections_map[img_path_short] = detections
+
+        #     main_progress_bar.update(1)
+
+        # main_progress_bar.close()
+        
+        
+        # end_time = time.time()
+        # elapsed_time = end_time - start_time
+        # print(f"Time take to label the dataset {elapsed_time:.5f} seconds") 
+        
         dataset = sv.DetectionDataset(
             self.ontology.classes(), images_map, detections_map
         )
