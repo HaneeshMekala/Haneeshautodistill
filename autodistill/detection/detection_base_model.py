@@ -68,6 +68,7 @@ class DetectionBaseModel(BaseModel):
         sahi: bool = False,
         record_confidence: bool = False,
         nms_settings: NmsSetting = NmsSetting.NONE,
+        batch_size: int = 2 
     ) -> sv.DetectionDataset:
         """
         Label a dataset with the model.
