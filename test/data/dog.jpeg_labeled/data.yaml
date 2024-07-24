@@ -1,0 +1,5 @@
+names:
+- elephant
+nc: 1
+train: C:\Users\mekal\Haneeshautodistill\Haneeshautodistill\test\data\dog.jpeg_labeled/train/images
+val: C:\Users\mekal\Haneeshautodistill\Haneeshautodistill\test\data\dog.jpeg_labeled/valid/images
